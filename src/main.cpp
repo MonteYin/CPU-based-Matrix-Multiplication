@@ -44,9 +44,9 @@ int main() {
 
     int num_threads = 4;
     omp_set_num_threads(num_threads); 
-    std::cout << "Using " << num_threads << " OpenMP threads." << std::endl;
+    // std::cout << "Using " << num_threads << " OpenMP threads." << std::endl;
     
-    std::cout << "Initializing data with random values..."<< std::endl;
+    // std::cout << "Initializing data with random values..."<< std::endl;
     
     std::vector<float> A(M * K);
     std::vector<fp4_t> B_fp4(K * N / 2);
@@ -105,8 +105,8 @@ int main() {
     std::cout << "Total Optimized path time (including packing): " << pack_time.count() + opt_time.count() << " ms" << std::endl;
     print_performance(M, K, N, opt_time);
 
-    std::cout << "\n--- Numerical Accuracy Verification ---" << std::endl;
-    std::cout << "Optimized vs Reference Naive:" << std::endl;
+    // std::cout << "\n--- Numerical Accuracy Verification ---" << std::endl;
+    // std::cout << "Optimized vs Reference Naive:" << std::endl;
     analyze_differences(C_opt, C_naive);
 
     std::vector<double> times_naive, times_opt;
