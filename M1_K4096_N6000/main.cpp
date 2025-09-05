@@ -50,6 +50,7 @@ int main() {
     
     std::vector<float> A(M * K);
     std::vector<fp4_t> B_fp4(K * N / 2);
+    std::vector<float> B_float(K * N);
 
     std::mt19937 gen(seed);
     std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
@@ -72,6 +73,9 @@ int main() {
             
             int idx = j * K / 2 + k / 2;
             B_fp4[idx] = (fp4_val1 << 4) | fp4_val2;
+            
+            B_float[j * K + k] = fp4_to_float_fast(fp4_val1);
+            B_float[j * K + k + 1] = fp4_to_float_fast(fp4_val2);
         }
     }
 
@@ -94,68 +98,59 @@ int main() {
     std::cout << "Naive time: " << naive_time.count() << " ms" << std::endl;
     print_performance(M, K, N, naive_time);
 
-    // Optimized implementation
-    std::cout << "\nRunning Optimized implementation..." << std::endl;
+    // Optimized implementation FP4
+    std::cout << "Running Optimized implementation (FP4)..." << std::endl;
     std::vector<float> C_opt(M * N);
     auto opt_start = std::chrono::high_resolution_clock::now();
     matmul_opt(A, B_packed, C_opt, K, N);
     auto opt_end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> opt_time = opt_end - opt_start;
-    std::cout << "Optimized time: " << opt_time.count() << " ms" << std::endl;
+    std::cout << "Optimized (FP4) time: " << opt_time.count() << " ms" << std::endl;
     std::cout << "Total Optimized path time (including packing): " << pack_time.count() + opt_time.count() << " ms" << std::endl;
     print_performance(M, K, N, opt_time);
 
+    // Float Version
+    std::cout << "Running Optimized implementation (Float)..." << std::endl;
+    std::vector<float> C_opt_float(M * N);
+    auto opt_float_start = std::chrono::high_resolution_clock::now();
+    matmul_opt_float(A, B_float, C_opt_float, K, N);
+    auto opt_float_end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> opt_float_time = opt_float_end - opt_float_start;
+    std::cout << "Optimized (Float) time: " << opt_float_time.count() << " ms" << std::endl;
+    print_performance(M, K, N, opt_float_time);
+    
     // std::cout << "\n--- Numerical Accuracy Verification ---" << std::endl;
-    // std::cout << "Optimized vs Reference Naive:" << std::endl;
+    std::cout << "FP4 vs Reference Naive:" << std::endl;
     analyze_differences(C_opt, C_naive);
 
-    std::vector<double> times_naive, times_opt;
+    std::cout << "Float vs Reference Naive:" << std::endl;
+    analyze_differences(C_opt_float, C_naive);
     
-    for (int iter = 0; iter < 100; ++iter) {
-
+    std::vector<double> fp4_times;
+    for (int i = 0; i < 1000; ++i) {
         auto start = std::chrono::high_resolution_clock::now();
-        matmul_naive(A, B_fp4, C_naive, K, N);
-        auto end = std::chrono::high_resolution_clock::now();
-        double time_ms = std::chrono::duration<double, std::milli>(end - start).count();
-        times_naive.push_back(time_ms);
-        
-        start = std::chrono::high_resolution_clock::now();
         matmul_opt(A, B_packed, C_opt, K, N);
-        end = std::chrono::high_resolution_clock::now();
-        time_ms = std::chrono::duration<double, std::milli>(end - start).count();
-        times_opt.push_back(time_ms);
-        
-        // std::cout << "Iteration " << (iter + 1) << " - Naive: " 
-        //           << std::fixed << std::setprecision(3) << time_ms 
-        //           << " ms, Optimized: " << time_ms << " ms" << std::endl;
+        auto end = std::chrono::high_resolution_clock::now();
+        fp4_times.push_back(std::chrono::duration<double, std::milli>(end - start).count());
     }
-
-    std::sort(times_naive.begin(), times_naive.end());
-    std::sort(times_opt.begin(), times_opt.end());
+    std::sort(fp4_times.begin(), fp4_times.end());
+    double avg_fp4_time = std::accumulate(fp4_times.begin() + 2, fp4_times.end() - 2, 0.0) / 996;
     
-    auto calculate_trimmed_average = [](const std::vector<double>& times, const std::string& label) -> double {
-        if (times.size() <= 20) {
-            std::cout << label << ": Using all " << times.size() << " samples (no trimming applied)" << std::endl;
-            return std::accumulate(times.begin(), times.end(), 0.0) / times.size();
-        }
-        
-        auto begin_it = times.begin() + 10;
-        auto end_it = times.end() - 10;
-        int count = end_it - begin_it;
-        
-        return std::accumulate(begin_it, end_it, 0.0) / count;
-    };
+    std::vector<double> float_times;
+    for (int i = 0; i < 1000; ++i) {
+        auto start = std::chrono::high_resolution_clock::now();
+        matmul_opt_float(A, B_float, C_opt_float, K, N);
+        auto end = std::chrono::high_resolution_clock::now();
+        float_times.push_back(std::chrono::duration<double, std::milli>(end - start).count());
+    }
+    std::sort(float_times.begin(), float_times.end());
+    double avg_float_time = std::accumulate(float_times.begin() + 2, float_times.end() - 2, 0.0) / 996;
     
-    double avg_naive = calculate_trimmed_average(times_naive, "Naive implementation");
-    double avg_opt = calculate_trimmed_average(times_opt, "Optimized implementation");
-
-    std::cout << "\n--- Final Performance Summary ---" << std::endl;
-    std::cout << std::fixed << std::setprecision(3);
-    std::cout << "Naive Reference - Average: " << avg_naive << " ms (" 
-              << calculate_gflops(M, K, N, avg_naive) << " GFLOPS)" << std::endl;
+    std::cout << "FP4 Optimized Average: " << std::fixed << std::setprecision(3) << avg_fp4_time << " ms";
+    std::cout << " (" << std::fixed << std::setprecision(3) << (M * K * N * 2.0) / (avg_fp4_time * 1e-3) / 1e9 << " GFLOPS)" << std::endl;
     
-    std::cout << "Optimized Average: " << avg_opt << " ms (" 
-              << calculate_gflops(M, K, N, avg_opt) << " GFLOPS)" << std::endl;
+    std::cout << "Float Optimized Average: " << std::fixed << std::setprecision(3) << avg_float_time << " ms";
+    std::cout << " (" << std::fixed << std::setprecision(3) << (M * K * N * 2.0) / (avg_float_time * 1e-3) / 1e9 << " GFLOPS)" << std::endl;
 
     return 0;
 }

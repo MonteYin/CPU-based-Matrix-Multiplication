@@ -6,23 +6,24 @@ LDFLAGS = -fopenmp
 
 TARGET = matmul_avx_fp4
 
-SRCS = $(wildcard *.cpp)
+CORE_SRCS = fp4_conversion.cpp matmul_opt.cpp
+MAIN_SRCS = main.cpp $(CORE_SRCS)
 
-OBJS = $(SRCS:.cpp=.o)
+MAIN_OBJS = $(MAIN_SRCS:.cpp=.o)
 
 .PHONY: all
 all: $(TARGET)
 
-$(TARGET): $(OBJS)
+$(TARGET): $(MAIN_OBJS)
 	$(CXX) $(LDFLAGS) -o $@ $^
 
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 .PHONY: run
-run: all
+run: $(TARGET)
 	./$(TARGET)
 
 .PHONY: clean
 clean:
-	rm -f $(TARGET) $(OBJS)
+	rm -f $(TARGET) *.o
